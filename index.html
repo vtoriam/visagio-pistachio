@@ -53,6 +53,9 @@
       <div class="chip active" data-type="urgent_care">
         <span class="dot" style="background: var(--urgent)"></span> Urgent Care
       </div>
+      <div class="chip" data-type="open_only">
+        <span class="dot" style="background: var(--accent)"></span> Open Now
+      </div>
       <div class="recommendation-banner">
         <b>🚑 Recommendation:</b> <span id="recText">Loading...</span>
       </div>
@@ -68,8 +71,7 @@
           Sort by:
           <select id="sortSelect">
             <option value="distance">Distance</option>
-            <option value="rating">Rating</option>
-            <option value="name">Name A-Z</option>
+            <option value="wait">Wait Time</option>
           </select>
         </div>
         <div class="results-list" id="resultsList">

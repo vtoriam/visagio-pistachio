@@ -10,6 +10,7 @@ let markers = {
 };
 let allResults = [];
 let activeFilters = new Set(["hospital", "pharmacy", "urgent_care"]);
+let openOnly = false;
 let userLocation = null;
 let radiusKm = 5;
 
@@ -263,13 +264,21 @@ function showPopup(marker) {
             '<div class="info-hours-status unknown">🕒 Hours not available</div>';
         }
 
+        const isClosed =
+          placeDetails.opening_hours &&
+          placeDetails.opening_hours.open_now === false;
+        const waitChip =
+          marker.waitTime > 0 && !isClosed
+            ? `<span class="info-chip info-chip-wait">⏱ Wait: ${marker.waitTime} mins</span>`
+            : "";
+
         // Build detailed content
         let content = `
           <div class="info-box">
             <h3 class="info-title">${escHtml(place.name)}</h3>
             <p class="info-address">${escHtml(placeDetails.formatted_address || place.vicinity || "No address available")}</p>
             <div class="info-meta">
-              <span class="info-chip info-chip-wait">⏱ Wait: ${marker.waitTime} mins</span>
+              ${waitChip}
               <span class="info-chip info-chip-type">${categoryLabel}</span>
             </div>
             <div class="info-hours">
@@ -302,12 +311,19 @@ function showPopup(marker) {
             : '<div class="info-hours-status unknown">🕒 Hours not available</div>'
           : '<div class="info-hours-status unknown">🕒 Hours not available</div>';
 
+        const closedFallback =
+          place.opening_hours && place.opening_hours.open_now === false;
+        const fallbackWait =
+          marker.waitTime > 0 && !closedFallback
+            ? `<span class="info-chip info-chip-wait">⏱ Wait: ${marker.waitTime} mins</span>`
+            : "";
+
         const content = `
           <div class="info-box">
             <h3 class="info-title">${escHtml(place.name)}</h3>
             <p class="info-address">${escHtml(place.vicinity || "No address available")}</p>
             <div class="info-meta">
-              <span class="info-chip info-chip-wait">⏱ Wait: ${marker.waitTime} mins</span>
+              ${fallbackWait}
               <span class="info-chip info-chip-type">${categoryLabel}</span>
             </div>
             <div class="info-hours">
@@ -395,9 +411,12 @@ function searchNear(location) {
 
 function sortAndRender() {
   const sort = document.getElementById("sortSelect").value;
-  const sorted = [...allResults].filter((place) =>
-    activeFilters.has(place._type),
-  );
+  const sorted = [...allResults]
+    .filter((place) => activeFilters.has(place._type))
+    .filter((place) => {
+      if (!openOnly) return true;
+      return place.opening_hours && place.opening_hours.open_now === true;
+    });
 
   if (sort === "distance" && userLocation) {
     sorted.sort((a, b) => {
@@ -411,10 +430,8 @@ function sortAndRender() {
       });
       return da - db;
     });
-  } else if (sort === "rating") {
-    sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-  } else if (sort === "name") {
-    sorted.sort((a, b) => a.name.localeCompare(b.name));
+  } else if (sort === "wait") {
+    sorted.sort((a, b) => (a._waitTime || 999) - (b._waitTime || 999));
   }
 
   renderList(sorted);
@@ -441,8 +458,9 @@ function renderList(places) {
         : '<span class="open-badge unknown">Hours N/A</span>';
 
       const waitTime = place._waitTime || 0;
+      const isOpen = place.opening_hours && place.opening_hours.open_now;
       const waitDisplay =
-        waitTime > 0
+        waitTime > 0 && isOpen
           ? `<span class="wait-badge">⏱ ${waitTime} mins</span>`
           : "";
 
@@ -678,6 +696,14 @@ document.getElementById("sortSelect").addEventListener("change", sortAndRender);
 document.querySelectorAll(".chip").forEach((chip) => {
   chip.addEventListener("click", () => {
     const type = chip.dataset.type;
+
+    if (type === "open_only") {
+      openOnly = !openOnly;
+      chip.classList.toggle("active", openOnly);
+      sortAndRender();
+      return;
+    }
+
     if (activeFilters.has(type)) {
       if (activeFilters.size === 1) {
         showToast("At least one filter must be active.");

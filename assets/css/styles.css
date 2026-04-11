@@ -224,6 +224,19 @@ header {
   background: #f8f0ff;
 }
 
+.chip[data-type="open_only"] {
+  color: #16a34a;
+}
+
+.chip[data-type="open_only"] .dot {
+  background: #16a34a;
+}
+
+.chip[data-type="open_only"].active {
+  background: #dcfce7;
+  border-color: #16a34a;
+}
+
 .main {
   display: flex;
   flex: 1;
