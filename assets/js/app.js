@@ -176,13 +176,25 @@ function showPopup(marker) {
   const place = marker.place;
   const lat = place.geometry.location.lat();
   const lng = place.geometry.location.lng();
+  const categoryLabel =
+    marker.category === "hospital"
+      ? "Hospital"
+      : marker.category === "urgent"
+        ? "Urgent Care"
+        : "Pharmacy";
+  const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
 
   const content = `
-    <div style="max-width:220px">
-      <h3>${place.name}</h3>
-      <p>${place.vicinity || "No address"}</p>
-      <p>⏱ Wait: ${marker.waitTime} mins</p>
-      <button onclick="window.open('https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}')">Get Directions</button>
+    <div class="info-box">
+      <h3 class="info-title">${escHtml(place.name)}</h3>
+      <p class="info-address">${escHtml(place.vicinity || "No address available")}</p>
+      <div class="info-meta">
+        <span class="info-chip info-chip-wait">⏱ Wait: ${marker.waitTime} mins</span>
+        <span class="info-chip info-chip-type">${categoryLabel}</span>
+      </div>
+      <a class="info-directions" href="${directionsUrl}" target="_blank" rel="noopener noreferrer">
+        Get Directions
+      </a>
     </div>
   `;
 

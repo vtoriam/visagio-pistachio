@@ -415,34 +415,74 @@ header {
 
 .info-box {
   font-family: "DM Sans", sans-serif;
-  max-width: 260px;
-  padding: 4px;
+  width: 270px;
+  padding: 8px 6px 4px;
 }
 
 .info-box h3 {
   font-family: "Syne", sans-serif;
-  font-size: 15px;
-  margin-bottom: 4px;
+  font-size: 24px;
+  line-height: 1.15;
+  margin-bottom: 8px;
+  color: var(--text);
 }
 
 .info-box p {
-  font-size: 12px;
-  color: #555;
-  margin: 2px 0;
+  font-size: 14px;
+  color: #4b5563;
+  margin: 0;
+  line-height: 1.4;
 }
 
-.info-box .ib-open {
+.info-meta {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.info-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
   font-size: 12px;
   font-weight: 600;
-  margin-top: 4px;
 }
 
-.info-box .ib-open.open {
-  color: #16a34a;
+.info-chip-wait {
+  background: #fff1f2;
+  color: #be123c;
 }
 
-.info-box .ib-open.closed {
-  color: #dc2626;
+.info-chip-type {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.info-directions {
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #111827, #374151);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  padding: 9px 14px;
+  transition:
+    transform 0.15s ease,
+    filter 0.2s ease;
+}
+
+.info-directions:hover {
+  filter: brightness(1.08);
+}
+
+.info-directions:active {
+  transform: translateY(1px);
 }
 
 #loading {
