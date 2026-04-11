@@ -95,7 +95,7 @@ header {
 }
 
 .radius-control {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 8px;
   font-size: 13px;
