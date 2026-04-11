@@ -721,6 +721,7 @@ document.getElementById("locateBtn").addEventListener("click", () => {
     return;
   }
 
+  showRadiusControl();
   showToast("Detecting your location...");
   navigator.geolocation.getCurrentPosition(
     (pos) => {
@@ -745,10 +746,18 @@ document.getElementById("locateBtn").addEventListener("click", () => {
   );
 });
 
+function showRadiusControl() {
+  document.querySelector(".radius-control").style.display = "flex";
+}
+
 let searchTimer;
 document.getElementById("searchInput").addEventListener("input", (e) => {
-  clearTimeout(searchTimer);
   const q = e.target.value.trim();
+  if (q.length > 0) {
+    showRadiusControl();
+  }
+
+  clearTimeout(searchTimer);
   if (q.length < 3) return;
 
   searchTimer = setTimeout(() => {

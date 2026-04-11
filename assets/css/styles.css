@@ -45,8 +45,8 @@ header {
 
 .logo {
   font-family: "Syne", sans-serif;
-  font-size: 22px;
-  font-weight: 800;
+  font-size: 24px;
+  font-weight: 700;
   color: var(--text);
   white-space: nowrap;
   letter-spacing: -0.5px;
@@ -95,7 +95,7 @@ header {
 }
 
 .radius-control {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 8px;
   font-size: 13px;
