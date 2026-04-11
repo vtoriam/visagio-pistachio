@@ -13,6 +13,8 @@ let activeFilters = new Set(["hospital", "pharmacy", "urgent_care"]);
 let openOnly = false;
 let userLocation = null;
 let radiusKm = 5;
+let waEdWaitLookup = new Map();
+let waEdSnapshot = null;
 
 const TYPE_CONFIG = {
   hospital: {
@@ -60,16 +62,22 @@ window.initMap = function () {
 
 function loadGoogleMapsScript() {
   const key = APP_CONFIG.googleMapsApiKey;
-  if (!key) {
+  const normalizedKey = String(key || "").trim();
+  const looksLikePlaceholder =
+    !normalizedKey ||
+    normalizedKey === "your_google_maps_api_key" ||
+    /YOUR_API_KEY/i.test(normalizedKey);
+
+  if (looksLikePlaceholder) {
     document.getElementById("loading").style.display = "none";
     showToast(
-      "Missing Google Maps API key. Set GOOGLE_MAPS_API_KEY in server env.",
+      "Google Maps key is missing. Set GOOGLE_MAPS_API_KEY in .env and restart.",
     );
     return;
   }
 
   const script = document.createElement("script");
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&callback=initMap`;
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(normalizedKey)}&libraries=places&callback=initMap`;
   script.async = true;
   script.defer = true;
   document.body.appendChild(script);
@@ -80,6 +88,15 @@ function loadMarkers(center, radius = 5000) {
   allResults = [];
   renderList([]);
   document.getElementById("loading").style.display = "flex";
+
+  fetchWaEdLiveWaits()
+    .then(() => {
+      applyLiveWaitsToResults();
+      sortAndRender();
+    })
+    .catch(() => {
+      // Keep simulated waits when live feed is unavailable.
+    });
 
   const service = new google.maps.places.PlacesService(map);
   let pending = 3;
@@ -140,6 +157,71 @@ function generateWaitTime(category) {
   if (category === "urgent") return Math.floor(Math.random() * 35 + 10);
   if (category === "pharmacy") return Math.floor(Math.random() * 10);
   return 0;
+}
+
+function normalizeHospitalName(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getLiveWaitForPlace(place) {
+  if (!place || !place.name || waEdWaitLookup.size === 0) return null;
+
+  const normalizedPlaceName = normalizeHospitalName(place.name);
+  if (!normalizedPlaceName) return null;
+
+  if (waEdWaitLookup.has(normalizedPlaceName)) {
+    return waEdWaitLookup.get(normalizedPlaceName);
+  }
+
+  for (const [hospitalName, waitMins] of waEdWaitLookup.entries()) {
+    if (
+      normalizedPlaceName.includes(hospitalName) ||
+      hospitalName.includes(normalizedPlaceName)
+    ) {
+      return waitMins;
+    }
+  }
+
+  return null;
+}
+
+async function fetchWaEdLiveWaits() {
+  const response = await fetch("/api/wa-ed-live");
+  if (!response.ok) return;
+
+  const payload = await response.json();
+  if (!Array.isArray(payload.hospitals)) return;
+
+  waEdWaitLookup = new Map(
+    payload.hospitals
+      .map((row) => [normalizeHospitalName(row.hospital), row.waitMins])
+      .filter(([name, waitMins]) => name && Number.isFinite(waitMins)),
+  );
+  waEdSnapshot = payload.snapshot || null;
+}
+
+function applyLiveWaitsToResults() {
+  allResults.forEach((place) => {
+    const liveWait = getLiveWaitForPlace(place);
+    if (liveWait === null) return;
+
+    place._waitTime = liveWait;
+    place._waitSource = "wa_ed_live";
+  });
+
+  Object.keys(markers).forEach((cat) => {
+    markers[cat].forEach((marker) => {
+      const liveWait = getLiveWaitForPlace(marker.place);
+      if (liveWait === null) return;
+
+      marker.waitTime = liveWait;
+    });
+  });
 }
 
 function addMarkers(results, status, color, category) {
@@ -344,14 +426,25 @@ function showPopup(marker) {
 function updateAllPopups() {
   Object.keys(markers).forEach((cat) => {
     markers[cat].forEach((m) => {
-      m.waitTime = generateWaitTime(cat);
+      const liveWait = getLiveWaitForPlace(m.place);
+      m.waitTime = liveWait === null ? generateWaitTime(cat) : liveWait;
+
       // Also update wait time in allResults
       const result = allResults.find((r) => r.place_id === m.place.place_id);
       if (result) {
         result._waitTime = m.waitTime;
+        result._waitSource = liveWait === null ? "simulated" : "wa_ed_live";
       }
     });
   });
+
+  if (waEdSnapshot) {
+    const recText = document.getElementById("recText");
+    if (recText && !recText.dataset.snapshotHintShown) {
+      recText.dataset.snapshotHintShown = "true";
+      recText.title = `WA ED snapshot: ${waEdSnapshot}`;
+    }
+  }
 }
 
 function updateRecommendation(center) {
@@ -533,6 +626,9 @@ function renderMarkers(places) {
     });
 
     marker.waitTime = generateWaitTime(category);
+    if (Number.isFinite(place._waitTime)) {
+      marker.waitTime = place._waitTime;
+    }
     marker.category = category;
     marker.place = place;
 
