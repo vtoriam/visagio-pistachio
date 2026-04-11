@@ -11,43 +11,53 @@
 <div id="map"></div>
 
 <script>
-function initMap() {
-  const location = { lat: -31.9505, lng: 115.8605 };
+let map;   // make global so callback can use it
 
-  const map = new google.maps.Map(document.getElementById("map"), {
+function initMap() {
+
+  // default location (fallback if GPS fails)
+  const defaultLocation = { lat: -31.9505, lng: 115.8605 };
+
+  map = new google.maps.Map(document.getElementById("map"), {
     zoom: 13,
-    center: location
+    center: defaultLocation
   });
 
+  // marker for default location
   new google.maps.Marker({
-    position: location,
+    position: defaultLocation,
     map
   });
 
   const service = new google.maps.places.PlacesService(map);
 
+  // search hospitals near default location
   service.nearbySearch({
-    location: userLocation,
+    location: defaultLocation,
     radius: 5000,
-    type: ["hospital"]
+    keyword: "hospital"
   }, callback);
-
 }
 
+// callback must use GLOBAL map
 function callback(results, status) {
   if (status === google.maps.places.PlacesServiceStatus.OK) {
+
     results.forEach(place => {
+
       new google.maps.Marker({
         position: place.geometry.location,
         map: map,
         title: place.name
       });
+
     });
   }
 }
 </script>
 
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDXtz4HiLnE_nfkCWc4B_ZFbegJohUBab4&callback=initMap" async defer></script>
+<!-- IMPORTANT: must include libraries=places -->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDXtz4HiLnE_nfkCWc4B_ZFbegJohUBab4&libraries=places&callback=initMap" async defer></script>
 
 </body>
 </html>
