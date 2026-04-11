@@ -144,7 +144,7 @@ header {
 }
 
 .filters {
-  padding: 10px 24px;
+  padding: 16px 40px;
   display: flex;
   gap: 8px;
   background: var(--panel);
@@ -155,7 +155,7 @@ header {
 }
 
 .recommendation-banner {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text);
   background: var(--bg);
   padding: 6px 12px;
@@ -172,6 +172,7 @@ header {
 
 .recommendation-banner b {
   color: var(--urgent);
+  font-weight: 700;
 }
 
 .chip {

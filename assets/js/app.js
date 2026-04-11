@@ -336,28 +336,39 @@ function renderMarkers(places) {
   clearMarkers();
   places.forEach((place) => {
     let category;
-    let color;
+    let typeConfig;
 
     if (place._type === "hospital") {
       category = "hospital";
-      color = "red";
+      typeConfig = TYPE_CONFIG.hospital;
     } else if (place._type === "urgent_care") {
       category = "urgent";
-      color = "orange";
+      typeConfig = TYPE_CONFIG.urgent_care;
     } else if (place._type === "pharmacy") {
       category = "pharmacy";
-      color = "green";
+      typeConfig = TYPE_CONFIG.pharmacy;
     } else {
       return;
     }
+
+    // Create SVG icon with matching color
+    const color = typeConfig.color;
+    const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 48" width="32" height="48">
+      <path d="M16 0C7.2 0 0 7.2 0 16c0 9.6 16 32 16 32s16-22.4 16-32c0-8.8-7.2-16-16-16z" fill="${color}" stroke="black" stroke-width="1.5"/>
+      <circle cx="16" cy="16" r="6" fill="white"/>
+    </svg>`;
+
+    const markerIcon = {
+      url: `data:image/svg+xml;base64,${btoa(svgIcon)}`,
+      scaledSize: new google.maps.Size(24, 36),
+      anchor: new google.maps.Point(12, 36),
+    };
 
     const marker = new google.maps.Marker({
       map,
       position: place.geometry.location,
       title: place.name,
-      icon: {
-        url: `https://maps.google.com/mapfiles/ms/icons/${color}-dot.png`,
-      },
+      icon: markerIcon,
     });
 
     marker.waitTime = generateWaitTime(category);
@@ -503,7 +514,20 @@ document.getElementById("searchInput").addEventListener("input", (e) => {
 document.getElementById("radiusSlider").addEventListener("input", (e) => {
   radiusKm = parseInt(e.target.value, 10);
   document.getElementById("radiusLabel").textContent = `${radiusKm} km`;
-  if (userLocation) searchNear(userLocation);
+
+  // Adjust zoom based on radius
+  let zoom;
+  if (radiusKm <= 2) zoom = 16;
+  else if (radiusKm <= 5) zoom = 15;
+  else if (radiusKm <= 10) zoom = 14;
+  else zoom = 13;
+  map.setZoom(zoom);
+
+  if (userLocation) {
+    searchNear(userLocation);
+  } else if (map) {
+    loadMarkers(map.getCenter(), radiusKm * 1000);
+  }
 });
 
 document.getElementById("sortSelect").addEventListener("change", sortAndRender);

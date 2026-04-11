@@ -1,8 +1,8 @@
 {
-  "name": "medifind",
+  "name": "mediwatch",
   "version": "1.0.0",
   "private": true,
-  "description": "MediFind website with Express server frontend",
+  "description": "MediWatch website with Express server frontend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

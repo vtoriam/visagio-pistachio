@@ -33,7 +33,7 @@ app.get("*", (_req, res) => {
 
 function startServer(port, attempt = 0) {
   const server = app.listen(port, () => {
-    console.log(`MediFind running at http://localhost:${port}`);
+    console.log(`MediWatch running at http://localhost:${port}`);
   });
 
   server.on("error", (error) => {
