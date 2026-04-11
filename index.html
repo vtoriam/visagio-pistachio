@@ -195,12 +195,6 @@
       .chip[data-type="hospital"].active {
         background: #fff0f0;
       }
-      .chip[data-type="doctor"] {
-        color: var(--clinic);
-      }
-      .chip[data-type="doctor"].active {
-        background: #f0faf8;
-      }
       .chip[data-type="pharmacy"] {
         color: var(--pharmacy);
       }
@@ -391,6 +385,32 @@
         position: relative;
       }
 
+      #controls {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: white;
+        padding: 10px;
+        border-radius: 6px;
+        font-family: "DM Sans", sans-serif;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        z-index: 999;
+      }
+
+      /* 🧠 NEW: Recommendation box */
+      #recommendationBox {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 230px;
+        background: white;
+        padding: 10px;
+        border-radius: 8px;
+        font-family: "DM Sans", sans-serif;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        z-index: 999;
+      }
+
       /* ── Info window custom ── */
       .info-box {
         font-family: "DM Sans", sans-serif;
@@ -562,9 +582,6 @@
       <div class="chip active" data-type="hospital">
         <span class="dot" style="background: var(--hospital)"></span> Hospital
       </div>
-      <div class="chip active" data-type="doctor">
-        <span class="dot" style="background: var(--clinic)"></span> GP / Clinic
-      </div>
       <div class="chip active" data-type="pharmacy">
         <span class="dot" style="background: var(--pharmacy)"></span> Pharmacy
       </div>
@@ -599,6 +616,39 @@
         </div>
       </div>
       <div id="map"></div>
+
+      <!-- <div id="controls">
+        <label
+          ><input
+            type="checkbox"
+            checked
+            onchange="toggleMarkers('hospital', this.checked)"
+          />
+          Hospitals</label
+        ><br />
+        <label
+          ><input
+            type="checkbox"
+            checked
+            onchange="toggleMarkers('urgent', this.checked)"
+          />
+          Urgent Care</label
+        ><br />
+        <label
+          ><input
+            type="checkbox"
+            checked
+            onchange="toggleMarkers('pharmacy', this.checked)"
+          />
+          Pharmacies</label
+        >
+      </div> -->
+
+      <!-- 🧠 NEW: Recommendation UI -->
+      <div id="recommendationBox">
+        <b>🚑 Recommendation</b>
+        <div id="recText">Loading...</div>
+      </div>
     </div>
 
     <script>
@@ -607,15 +657,14 @@
       const API_KEY = "YOUR_API_KEY_HERE";
 
       // ── STATE ───────────────────────────────────────────────
-      let map, infoWindow, geocoder, placesService;
-      let markers = [];
+      let map, infoWindow;
+      let markers = {
+        hospital: [],
+        urgent: [],
+        pharmacy: [],
+      };
       let allResults = [];
-      let activeFilters = new Set([
-        "hospital",
-        "doctor",
-        "pharmacy",
-        "urgent_care",
-      ]);
+      let activeFilters = new Set(["hospital", "pharmacy", "urgent_care"]);
       let userLocation = null;
       let radiusKm = 5;
       let activeItemId = null;
@@ -627,12 +676,6 @@
           icon: "🏥",
           color: "#e63946",
           bg: "#fff0f0",
-        },
-        doctor: {
-          label: "GP / Clinic",
-          icon: "🩺",
-          color: "#2a9d8f",
-          bg: "#f0faf8",
         },
         pharmacy: {
           label: "Pharmacy",
@@ -660,61 +703,226 @@
           mapTypeControl: false,
         });
 
-        geocoder = new google.maps.Geocoder();
         infoWindow = new google.maps.InfoWindow();
-        placesService = new google.maps.places.PlacesService(map);
+
+        loadMarkers(defaultCenter);
+
+        // 🔁 updates
+        setInterval(() => {
+          updateAllPopups();
+          updateRecommendation(defaultCenter);
+        }, 5000);
 
         document.getElementById("loading").style.display = "none";
       };
 
-      // ── SEARCH ──────────────────────────────────────────────
-      function searchNear(location) {
-        userLocation = location;
+      function loadMarkers(center, radius = 5000) {
         clearMarkers();
         allResults = [];
         renderList([]);
         document.getElementById("loading").style.display = "flex";
 
-        const types = [...activeFilters];
-        let pending = types.length;
-        if (pending === 0) {
-          document.getElementById("loading").style.display = "none";
-          return;
-        }
+        const service = new google.maps.places.PlacesService(map);
+        let pending = 3; // hospitals, urgent, pharmacy
 
-        types.forEach((type) => {
-          placesService.nearbySearch(
-            {
-              location,
-              radius: radiusKm * 1000,
-              type: [type === "urgent_care" ? "hospital" : type], // Google doesn't have urgent_care type, map to hospital
-              keyword: type === "urgent_care" ? "urgent care" : undefined,
+        // 🏥 Hospitals
+        service.nearbySearch(
+          {
+            location: center,
+            radius: radius,
+            keyword: "hospital",
+          },
+          (results, status) => {
+            addMarkers(results, status, "red", "hospital");
+            pending--;
+            if (pending === 0) {
+              document.getElementById("loading").style.display = "none";
+              sortAndRender();
+            }
+          },
+        );
+
+        // 🟠 Urgent Care
+        service.nearbySearch(
+          {
+            location: center,
+            radius: radius,
+            keyword: "urgent care",
+          },
+          (results, status) => {
+            addMarkers(results, status, "orange", "urgent");
+            pending--;
+            if (pending === 0) {
+              document.getElementById("loading").style.display = "none";
+              sortAndRender();
+            }
+          },
+        );
+
+        // 💊 Pharmacies
+        service.nearbySearch(
+          {
+            location: center,
+            radius: radius,
+            keyword: "pharmacy",
+          },
+          (results, status) => {
+            addMarkers(results, status, "green", "pharmacy");
+            pending--;
+            if (pending === 0) {
+              document.getElementById("loading").style.display = "none";
+              sortAndRender();
+            }
+          },
+        );
+
+        // Update recommendation
+        setTimeout(() => updateRecommendation(center), 1000);
+      }
+
+      // ⏱ wait times
+      function generateWaitTime(category) {
+        if (category === "hospital") return Math.floor(Math.random() * 90 + 30);
+        if (category === "urgent") return Math.floor(Math.random() * 35 + 10);
+        if (category === "pharmacy") return Math.floor(Math.random() * 10);
+      }
+
+      function addMarkers(results, status, color, category) {
+        if (status !== google.maps.places.PlacesServiceStatus.OK || !results)
+          return;
+
+        results.forEach((place) => {
+          if (!place.geometry || !place.geometry.location) return;
+
+          // Add to allResults for sidebar
+          if (!allResults.find((r) => r.place_id === place.place_id)) {
+            let _type;
+            if (category === "hospital") _type = "hospital";
+            else if (category === "urgent") _type = "urgent_care";
+            else if (category === "pharmacy") _type = "pharmacy";
+            allResults.push({ ...place, _type });
+          }
+
+          const marker = new google.maps.Marker({
+            position: place.geometry.location,
+            map: map,
+            title: place.name,
+            icon: {
+              url: `http://maps.google.com/mapfiles/ms/icons/${color}-dot.png`,
             },
-            (results, status) => {
-              if (
-                status === google.maps.places.PlacesServiceStatus.OK &&
-                results
-              ) {
-                results.forEach((place) => {
-                  if (!allResults.find((r) => r.place_id === place.place_id)) {
-                    allResults.push({ ...place, _type: type });
-                  }
-                });
-              }
-              pending--;
-              if (pending === 0) {
-                document.getElementById("loading").style.display = "none";
-                sortAndRender();
-              }
-            },
-          );
+          });
+
+          marker.waitTime = generateWaitTime(category);
+          marker.category = category;
+          marker.place = place;
+
+          marker.addListener("click", () => {
+            showPopup(marker);
+          });
+
+          markers[category].push(marker);
         });
+      }
+
+      function showPopup(marker) {
+        const place = marker.place;
+
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
+
+        const content = `
+          <div style="max-width:220px">
+            <h3>${place.name}</h3>
+            <p>${place.vicinity || "No address"}</p>
+            <p>⏱ Wait: ${marker.waitTime} mins</p>
+
+            <button onclick="window.open(
+              'https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}'
+            )">
+              Get Directions
+            </button>
+          </div>
+        `;
+
+        infoWindow.setContent(content);
+        infoWindow.open(map, marker);
+      }
+
+      function updateAllPopups() {
+        Object.keys(markers).forEach((cat) => {
+          markers[cat].forEach((m) => {
+            m.waitTime = generateWaitTime(cat);
+          });
+        });
+      }
+
+      // 🧠 NEW: recommendation engine
+      function updateRecommendation(center) {
+        if (!markers.urgent.length) return;
+
+        let best = null;
+        let bestScore = Infinity;
+
+        markers.urgent.forEach((m) => {
+          const place = m.place;
+
+          const lat = place.geometry.location.lat();
+          const lng = place.geometry.location.lng();
+
+          const distance =
+            Math.sqrt(
+              Math.pow(center.lat - lat, 2) + Math.pow(center.lng - lng, 2),
+            ) * 111; // rough km conversion
+
+          const wait = m.waitTime || 999;
+
+          const score = wait + distance * 5;
+
+          if (score < bestScore) {
+            bestScore = score;
+            best = { place, wait, distance };
+          }
+        });
+
+        if (best) {
+          document.getElementById("recText").innerHTML = `
+            <b>${best.place.name}</b><br/>
+            ⏱ ${best.wait} mins<br/>
+            📍 ${best.distance.toFixed(2)} km
+          `;
+        }
+      }
+
+      function toggleMarkers(category, show) {
+        markers[category].forEach((marker) => {
+          marker.setMap(show ? map : null);
+        });
+      }
+
+      function clearMarkers() {
+        Object.keys(markers).forEach((cat) => {
+          markers[cat].forEach((m) => m.setMap(null));
+        });
+        markers = {
+          hospital: [],
+          urgent: [],
+          pharmacy: [],
+        };
+      }
+
+      // ── SEARCH ──────────────────────────────────────────────
+      function searchNear(location) {
+        userLocation = location;
+        map.setCenter(location);
+        loadMarkers(location, radiusKm * 1000);
       }
 
       // ── SORT ────────────────────────────────────────────────
       function sortAndRender() {
         const sort = document.getElementById("sortSelect").value;
-        let sorted = [...allResults];
+        let sorted = [...allResults].filter((place) =>
+          activeFilters.has(place._type),
+        );
 
         if (sort === "distance" && userLocation) {
           sorted.sort((a, b) => {
@@ -794,52 +1002,39 @@
       function renderMarkers(places) {
         clearMarkers();
         places.forEach((place) => {
-          const cfg = TYPE_CONFIG[place._type] || TYPE_CONFIG.hospital;
+          let category, color;
+          if (place._type === "hospital") {
+            category = "hospital";
+            color = "red";
+          } else if (place._type === "urgent_care") {
+            category = "urgent";
+            color = "orange";
+          } else if (place._type === "pharmacy") {
+            category = "pharmacy";
+            color = "green";
+          } else {
+            return; // Skip other types
+          }
+
           const marker = new google.maps.Marker({
             map,
             position: place.geometry.location,
             title: place.name,
             icon: {
-              path: google.maps.SymbolPath.CIRCLE,
-              scale: 12,
-              fillColor: cfg.color,
-              fillOpacity: 1,
-              strokeColor: "#fff",
-              strokeWeight: 2,
+              url: `http://maps.google.com/mapfiles/ms/icons/${color}-dot.png`,
             },
           });
 
+          marker.waitTime = generateWaitTime(category);
+          marker.category = category;
+          marker.place = place;
+
           marker.addListener("click", () => {
-            selectPlace(place.place_id, false);
-            showInfoWindow(marker, place, cfg);
+            showPopup(marker);
           });
 
-          marker._placeId = place.place_id;
-          markers.push(marker);
+          markers[category].push(marker);
         });
-      }
-
-      function clearMarkers() {
-        markers.forEach((m) => m.setMap(null));
-        markers = [];
-      }
-
-      function showInfoWindow(marker, place, cfg) {
-        const openText = place.opening_hours
-          ? place.opening_hours.open_now
-            ? `<span class="ib-open open">Open Now</span>`
-            : `<span class="ib-open closed">Closed</span>`
-          : "";
-        const rating = place.rating ? `⭐ ${place.rating.toFixed(1)}` : "";
-        infoWindow.setContent(`
-      <div class="info-box">
-        <h3>${cfg.icon} ${escHtml(place.name)}</h3>
-        <p>${escHtml(place.vicinity || "")}</p>
-        <p>${rating}</p>
-        ${openText}
-      </div>
-    `);
-        infoWindow.open(map, marker);
       }
 
       // ── SELECT PLACE ────────────────────────────────────────
@@ -857,15 +1052,18 @@
         }
 
         // Pan to marker
-        const marker = markers.find((m) => m._placeId === placeId);
-        if (marker) {
-          map.panTo(marker.getPosition());
+        let foundMarker = null;
+        Object.keys(markers).forEach((cat) => {
+          markers[cat].forEach((m) => {
+            if (m.place.place_id === placeId) {
+              foundMarker = m;
+            }
+          });
+        });
+        if (foundMarker) {
+          map.panTo(foundMarker.getPosition());
           map.setZoom(15);
-          const place = allResults.find((p) => p.place_id === placeId);
-          if (place) {
-            const cfg = TYPE_CONFIG[place._type] || TYPE_CONFIG.hospital;
-            showInfoWindow(marker, place, cfg);
-          }
+          showPopup(foundMarker);
         }
       }
 
@@ -950,7 +1148,14 @@
             activeFilters.add(type);
             chip.classList.add("active");
           }
-          if (userLocation) searchNear(userLocation);
+          // Toggle markers
+          let cat;
+          if (type === "hospital") cat = "hospital";
+          else if (type === "urgent_care") cat = "urgent";
+          else if (type === "pharmacy") cat = "pharmacy";
+          if (cat) toggleMarkers(cat, activeFilters.has(type));
+          // Re-render list
+          sortAndRender();
         });
       });
 
@@ -1042,7 +1247,7 @@
           stylers: [{ color: "#374151" }],
         },
         { elementType: "labels.text.fill", stylers: [{ color: "#555" }] },
-        { elementType: "labels.text.stroke", stylers: [{ color: "#fff" }] },
+        { elementType: "labels.text.stroke", stylers: [{ visibility: "off" }] },
       ];
     </script>
 
