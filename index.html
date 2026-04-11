@@ -163,6 +163,27 @@
         border-bottom: 1px solid var(--border);
         flex-shrink: 0;
         flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .recommendation-banner {
+        font-size: 13px;
+        color: var(--text);
+        background: var(--bg);
+        padding: 6px 12px;
+        border-radius: 20px;
+        border: 1px solid var(--border);
+        margin-left: auto;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+
+      .recommendation-banner:hover {
+        background: #e5e7eb;
+      }
+
+      .recommendation-banner b {
+        color: var(--urgent);
       }
 
       .chip {
@@ -397,20 +418,6 @@
         z-index: 999;
       }
 
-      /* 🧠 NEW: Recommendation box */
-      #recommendationBox {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        width: 230px;
-        background: white;
-        padding: 10px;
-        border-radius: 8px;
-        font-family: "DM Sans", sans-serif;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-        z-index: 999;
-      }
-
       /* ── Info window custom ── */
       .info-box {
         font-family: "DM Sans", sans-serif;
@@ -588,6 +595,9 @@
       <div class="chip active" data-type="urgent_care">
         <span class="dot" style="background: var(--urgent)"></span> Urgent Care
       </div>
+      <div class="recommendation-banner">
+        <b>🚑 Recommendation:</b> <span id="recText">Loading...</span>
+      </div>
     </div>
 
     <!-- Main -->
@@ -643,12 +653,6 @@
           Pharmacies</label
         >
       </div> -->
-
-      <!-- 🧠 NEW: Recommendation UI -->
-      <div id="recommendationBox">
-        <b>🚑 Recommendation</b>
-        <div id="recText">Loading...</div>
-      </div>
     </div>
 
     <script>
@@ -657,7 +661,7 @@
       const API_KEY = "YOUR_API_KEY_HERE";
 
       // ── STATE ───────────────────────────────────────────────
-      let map, infoWindow;
+      let map, infoWindow, geocoder;
       let markers = {
         hospital: [],
         urgent: [],
@@ -704,6 +708,7 @@
         });
 
         infoWindow = new google.maps.InfoWindow();
+        geocoder = new google.maps.Geocoder();
 
         loadMarkers(defaultCenter);
 
@@ -886,10 +891,12 @@
 
         if (best) {
           document.getElementById("recText").innerHTML = `
-            <b>${best.place.name}</b><br/>
-            ⏱ ${best.wait} mins<br/>
-            📍 ${best.distance.toFixed(2)} km
+            <b>${best.place.name}</b> • ⏱ ${best.wait} mins • 📍 ${best.distance.toFixed(2)} km
           `;
+          // Make the banner clickable
+          const banner = document.querySelector(".recommendation-banner");
+          banner.onclick = () => selectPlace(best.place.place_id);
+          banner.style.cursor = "pointer";
         }
       }
 
