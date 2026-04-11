@@ -1,0 +1,17 @@
+{
+  "name": "urgentnow",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*", "backend"],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:web\"",
+    "build": "npm run build --workspaces",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3",
+    "eslint": "^8.56.0"
+  }
+}
