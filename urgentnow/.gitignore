@@ -1,0 +1,25 @@
+# dependencies
+node_modules/
+**/node_modules/
+
+# build
+.next/
+dist/
+build/
+coverage/
+
+# logs
+*.log
+yarn-debug.log*
+pnpm-debug.log*
+
+# env
+.env
+.env.local
+.env.*.local
+
+# mac
+.DS_Store
+
+# typescript
+*.tsbuildinfo
