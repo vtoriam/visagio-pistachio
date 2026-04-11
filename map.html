@@ -1,63 +1,233 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <title>Map</title>
-  <style>
-    #map { height: 100vh; width: 100%; }
-  </style>
-</head>
-<body>
+  <head>
+    <title>Healthcare Map</title>
 
-<div id="map"></div>
+    <style>
+      #map {
+        height: 100vh;
+        width: 100%;
+      }
 
-<script>
-let map;   // make global so callback can use it
+      #controls {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: white;
+        padding: 10px;
+        border-radius: 6px;
+        font-family: Arial, sans-serif;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        z-index: 999;
+      }
 
-function initMap() {
+      /* 🧠 NEW: Recommendation box */
+      #recommendationBox {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 230px;
+        background: white;
+        padding: 10px;
+        border-radius: 8px;
+        font-family: Arial, sans-serif;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        z-index: 999;
+      }
+    </style>
+  </head>
 
-  // default location (fallback if GPS fails)
-  const defaultLocation = { lat: -31.9505, lng: 115.8605 };
+  <body>
+    <div id="map"></div>
 
-  map = new google.maps.Map(document.getElementById("map"), {
-    zoom: 13,
-    center: defaultLocation
-  });
+    <div id="controls">
+      <label><input type="checkbox" checked onchange="toggleMarkers('hospital', this.checked)" /> Hospitals</label><br />
+      <label><input type="checkbox" checked onchange="toggleMarkers('urgent', this.checked)" /> Urgent Care</label><br />
+      <label><input type="checkbox" checked onchange="toggleMarkers('pharmacy', this.checked)" /> Pharmacies</label>
+    </div>
 
-  // marker for default location
-  new google.maps.Marker({
-    position: defaultLocation,
-    map
-  });
+    <!-- 🧠 NEW: Recommendation UI -->
+    <div id="recommendationBox">
+      <b>🚑 Recommendation</b>
+      <div id="recText">Loading...</div>
+    </div>
 
-  const service = new google.maps.places.PlacesService(map);
+    <script>
+      let map;
+      let infoWindow;
 
-  // search hospitals near default location
-  service.nearbySearch({
-    location: defaultLocation,
-    radius: 5000,
-    keyword: "hospital"
-  }, callback);
-}
+      let markers = {
+        hospital: [],
+        urgent: [],
+        pharmacy: [],
+      };
 
-// callback must use GLOBAL map
-function callback(results, status) {
-  if (status === google.maps.places.PlacesServiceStatus.OK) {
+      function initMap() {
+        const center = { lat: -31.9505, lng: 115.8605 };
 
-    results.forEach(place => {
+        map = new google.maps.Map(document.getElementById("map"), {
+          zoom: 13,
+          center: center,
+        });
 
-      new google.maps.Marker({
-        position: place.geometry.location,
-        map: map,
-        title: place.name
-      });
+        infoWindow = new google.maps.InfoWindow();
 
-    });
-  }
-}
-</script>
+        const service = new google.maps.places.PlacesService(map);
 
-<!-- IMPORTANT: must include libraries=places -->
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDXtz4HiLnE_nfkCWc4B_ZFbegJohUBab4&libraries=places&callback=initMap" async defer></script>
+        // 🏥 Hospitals
+        service.nearbySearch(
+          {
+            location: center,
+            radius: 5000,
+            keyword: "hospital",
+          },
+          (results, status) => addMarkers(results, status, "red", "hospital")
+        );
 
-</body>
+        // 🟠 Urgent Care
+        service.nearbySearch(
+          {
+            location: center,
+            radius: 5000,
+            keyword: "urgent care",
+          },
+          (results, status) => addMarkers(results, status, "orange", "urgent")
+        );
+
+        // 💊 Pharmacies
+        service.nearbySearch(
+          {
+            location: center,
+            radius: 5000,
+            keyword: "pharmacy",
+          },
+          (results, status) => addMarkers(results, status, "green", "pharmacy")
+        );
+
+        // 🔁 updates
+        setInterval(() => {
+          updateAllPopups();
+          updateRecommendation(center);
+        }, 5000);
+      }
+
+      // ⏱ wait times
+      function generateWaitTime(category) {
+        if (category === "hospital") return Math.floor(Math.random() * 90 + 30);
+        if (category === "urgent") return Math.floor(Math.random() * 35 + 10);
+        if (category === "pharmacy") return Math.floor(Math.random() * 10);
+      }
+
+      function addMarkers(results, status, color, category) {
+        if (status !== google.maps.places.PlacesServiceStatus.OK || !results) return;
+
+        results.forEach((place) => {
+          if (!place.geometry || !place.geometry.location) return;
+
+          const marker = new google.maps.Marker({
+            position: place.geometry.location,
+            map: map,
+            title: place.name,
+            icon: {
+              url: `http://maps.google.com/mapfiles/ms/icons/${color}-dot.png`,
+            },
+          });
+
+          marker.waitTime = generateWaitTime(category);
+          marker.category = category;
+          marker.place = place;
+
+          marker.addListener("click", () => {
+            showPopup(marker);
+          });
+
+          markers[category].push(marker);
+        });
+      }
+
+      function showPopup(marker) {
+        const place = marker.place;
+
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
+
+        const content = `
+          <div style="max-width:220px">
+            <h3>${place.name}</h3>
+            <p>${place.vicinity || "No address"}</p>
+            <p>⏱ Wait: ${marker.waitTime} mins</p>
+
+            <button onclick="window.open(
+              'https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}'
+            )">
+              Get Directions
+            </button>
+          </div>
+        `;
+
+        infoWindow.setContent(content);
+        infoWindow.open(map, marker);
+      }
+
+      function updateAllPopups() {
+        Object.keys(markers).forEach((cat) => {
+          markers[cat].forEach((m) => {
+            m.waitTime = generateWaitTime(cat);
+          });
+        });
+      }
+
+      // 🧠 NEW: recommendation engine
+      function updateRecommendation(center) {
+
+        if (!markers.urgent.length) return;
+
+        let best = null;
+        let bestScore = Infinity;
+
+        markers.urgent.forEach((m) => {
+
+          const place = m.place;
+
+          const lat = place.geometry.location.lat();
+          const lng = place.geometry.location.lng();
+
+          const distance =
+            Math.sqrt(
+              Math.pow(center.lat - lat, 2) +
+              Math.pow(center.lng - lng, 2)
+            ) * 111; // rough km conversion
+
+          const wait = m.waitTime || 999;
+
+          const score = wait + (distance * 5);
+
+          if (score < bestScore) {
+            bestScore = score;
+            best = { place, wait, distance };
+          }
+        });
+
+        if (best) {
+          document.getElementById("recText").innerHTML = `
+            <b>${best.place.name}</b><br/>
+            ⏱ ${best.wait} mins<br/>
+            📍 ${best.distance.toFixed(2)} km
+          `;
+        }
+      }
+
+      function toggleMarkers(category, show) {
+        markers[category].forEach((marker) => {
+          marker.setMap(show ? map : null);
+        });
+      }
+    </script>
+
+    <script
+      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDXtz4HiLnE_nfkCWc4B_ZFbegJohUBab4&libraries=places&callback=initMap"
+      async
+      defer
+    ></script>
+  </body>
 </html>
