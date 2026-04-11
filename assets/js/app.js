@@ -152,7 +152,8 @@ function addMarkers(results, status, color, category) {
       if (category === "hospital") type = "hospital";
       else if (category === "urgent") type = "urgent_care";
       else if (category === "pharmacy") type = "pharmacy";
-      allResults.push({ ...place, _type: type });
+      const waitTime = generateWaitTime(category);
+      allResults.push({ ...place, _type: type, _waitTime: waitTime });
     }
 
     const marker = new google.maps.Marker({
@@ -184,7 +185,8 @@ function showPopup(marker) {
         : "Pharmacy";
   const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
 
-  const content = `
+  // Show loading popup first
+  const loadingContent = `
     <div class="info-box">
       <h3 class="info-title">${escHtml(place.name)}</h3>
       <p class="info-address">${escHtml(place.vicinity || "No address available")}</p>
@@ -192,20 +194,146 @@ function showPopup(marker) {
         <span class="info-chip info-chip-wait">⏱ Wait: ${marker.waitTime} mins</span>
         <span class="info-chip info-chip-type">${categoryLabel}</span>
       </div>
+      <div class="info-hours">
+        <div class="info-hours-status loading">⏳ Loading hours...</div>
+      </div>
       <a class="info-directions" href="${directionsUrl}" target="_blank" rel="noopener noreferrer">
         Get Directions
       </a>
     </div>
   `;
 
-  infoWindow.setContent(content);
+  infoWindow.setContent(loadingContent);
   infoWindow.open(map, marker);
+
+  // Fetch detailed place information including opening hours
+  const service = new google.maps.places.PlacesService(map);
+  service.getDetails(
+    {
+      placeId: place.place_id,
+      fields: [
+        "opening_hours",
+        "formatted_address",
+        "website",
+        "formatted_phone_number",
+      ],
+    },
+    (placeDetails, status) => {
+      if (
+        status === google.maps.places.PlacesServiceStatus.OK &&
+        placeDetails
+      ) {
+        // Update place with detailed information
+        Object.assign(place, placeDetails);
+
+        // Format opening hours with detailed information
+        let hoursDisplay = "";
+        if (placeDetails.opening_hours) {
+          const hours = placeDetails.opening_hours;
+
+          // Current status
+          if (hours.open_now !== undefined) {
+            hoursDisplay += `<div class="info-hours-status ${hours.open_now ? "open" : "closed"}">
+              ${hours.open_now ? "🟢 Open Now" : "🔴 Closed"}
+            </div>`;
+          }
+
+          // Get today's hours
+          if (hours.weekday_text && hours.weekday_text.length > 0) {
+            const today = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
+            // Google Maps weekday_text starts with Sunday (index 0)
+            const todayIndex = today === 0 ? 6 : today - 1; // Convert to Google format (Monday = 0)
+            const todayHours =
+              hours.weekday_text[todayIndex] || "Hours not available";
+
+            hoursDisplay += `<div class="info-hours-today">${escHtml(todayHours)}</div>`;
+          }
+
+          // Special hours or additional info
+          if (hours.special_days) {
+            hoursDisplay += '<div class="info-hours-special">';
+            hours.special_days.forEach((special) => {
+              const date = new Date(special.date);
+              hoursDisplay += `<div class="info-hours-day">📅 ${date.toLocaleDateString()}: ${special.opening_hours ? special.opening_hours : "Closed"}</div>`;
+            });
+            hoursDisplay += "</div>";
+          }
+        } else {
+          hoursDisplay =
+            '<div class="info-hours-status unknown">🕒 Hours not available</div>';
+        }
+
+        // Build detailed content
+        let content = `
+          <div class="info-box">
+            <h3 class="info-title">${escHtml(place.name)}</h3>
+            <p class="info-address">${escHtml(placeDetails.formatted_address || place.vicinity || "No address available")}</p>
+            <div class="info-meta">
+              <span class="info-chip info-chip-wait">⏱ Wait: ${marker.waitTime} mins</span>
+              <span class="info-chip info-chip-type">${categoryLabel}</span>
+            </div>
+            <div class="info-hours">
+              ${hoursDisplay}
+            </div>
+        `;
+
+        // Add phone number if available
+        if (placeDetails.formatted_phone_number) {
+          content += `<div class="info-contact">
+            <a href="tel:${placeDetails.formatted_phone_number}" class="info-phone">📞 ${escHtml(placeDetails.formatted_phone_number)}</a>
+          </div>`;
+        }
+
+        content += `
+            <a class="info-directions" href="${directionsUrl}" target="_blank" rel="noopener noreferrer">
+              Get Directions
+            </a>
+          </div>
+        `;
+
+        infoWindow.setContent(content);
+      } else {
+        // Fallback to basic info if details fetch fails
+        const fallbackHoursDisplay = place.opening_hours
+          ? place.opening_hours.open_now !== undefined
+            ? `<div class="info-hours-status ${place.opening_hours.open_now ? "open" : "closed"}">
+              ${place.opening_hours.open_now ? "🟢 Open Now" : "🔴 Closed"}
+            </div>`
+            : '<div class="info-hours-status unknown">🕒 Hours not available</div>'
+          : '<div class="info-hours-status unknown">🕒 Hours not available</div>';
+
+        const content = `
+          <div class="info-box">
+            <h3 class="info-title">${escHtml(place.name)}</h3>
+            <p class="info-address">${escHtml(place.vicinity || "No address available")}</p>
+            <div class="info-meta">
+              <span class="info-chip info-chip-wait">⏱ Wait: ${marker.waitTime} mins</span>
+              <span class="info-chip info-chip-type">${categoryLabel}</span>
+            </div>
+            <div class="info-hours">
+              ${fallbackHoursDisplay}
+            </div>
+            <a class="info-directions" href="${directionsUrl}" target="_blank" rel="noopener noreferrer">
+              Get Directions
+            </a>
+          </div>
+        `;
+
+        infoWindow.setContent(content);
+      }
+    },
+  );
 }
 
 function updateAllPopups() {
   Object.keys(markers).forEach((cat) => {
     markers[cat].forEach((m) => {
       m.waitTime = generateWaitTime(cat);
+      // Also update wait time in allResults
+      const result = allResults.find((r) => r.place_id === m.place.place_id);
+      if (result) {
+        result._waitTime = m.waitTime;
+      }
     });
   });
 }
@@ -306,14 +434,17 @@ function renderList(places) {
   list.innerHTML = places
     .map((place) => {
       const cfg = TYPE_CONFIG[place._type] || TYPE_CONFIG.hospital;
-      const rating = place.rating
-        ? `<span class="stars">⭐ ${place.rating.toFixed(1)}</span>`
-        : "";
       const openNow = place.opening_hours
         ? place.opening_hours.open_now
           ? '<span class="open-badge open">Open Now</span>'
           : '<span class="open-badge closed">Closed</span>'
         : '<span class="open-badge unknown">Hours N/A</span>';
+
+      const waitTime = place._waitTime || 0;
+      const waitDisplay =
+        waitTime > 0
+          ? `<span class="wait-badge">⏱ ${waitTime} mins</span>`
+          : "";
 
       let dist = "";
       if (userLocation && place.geometry) {
@@ -334,7 +465,7 @@ function renderList(places) {
             </div>
           </div>
           <div class="result-meta">
-            ${rating}
+            ${waitDisplay}
             ${openNow}
             ${dist}
           </div>
